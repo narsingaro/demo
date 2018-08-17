@@ -1,0 +1,110 @@
+global class userBatch implements Database.Batchable<Sobject>, Database.Stateful{
+ global list<id> ulist = new list<id>();
+    //Method to get the data to be proceesed  
+    global database.Querylocator Start(Database.BatchableContext bc){
+        String query = 'Select Id, Name From user where isActive=true Limit 200';
+        return Database.getQueryLocator(query);
+    }
+ 
+ 
+    //Method to execute the batch
+    global void execute(Database.BatchableContext bc, list<user> scope){
+        for(user u : scope){ 
+            
+                system.debug(u.id);
+               ulist.add(u.id); 
+                
+            }
+        system.debug(ulist +'added');
+        System.enqueueJob(new newbatch(ulist));
+    }
+ 
+    //Method to be called after the excute
+    global void finish(Database.BatchableContext bc){
+        system.debug('user finish');
+        system.debug(ulist);
+   // Id batchInstanceId = Database.executeBatch(new batch2(ulist), 10);
+    }
+}
+
+
+
+public class newbatch implements Queueable {
+      list<id> userids1 = new list<id>();
+   public newbatch(list<id> userid){  
+      for(id o:userid)
+      {
+      userids1.add(o);
+      }
+  }
+    public void execute(QueueableContext context){
+        Database.executeBatch(new Batch2(userids1),10);
+    }
+
+}
+
+
+global class batch2 implements Database.Batchable<sObject>,Database.Stateful {
+    list<id> userids = new list<id>();
+    global batch2(list<id> userid){  
+      for(id o:userid)
+      {
+      userids.add(o);
+      }
+  }
+   global database.Querylocator Start(Database.BatchableContext bc){
+        String query = 'Select Id, Name From contact ';
+        return Database.getQueryLocator(query);       
+   }
+    global void execute(Database.BatchableContext bc, List<contact> scope)
+    {
+        System.debug('@@@'+'batch execute start');
+        map<id,boolean> usermap = new map<id,boolean>();
+         system.debug(usermap.keyset() + 'map');
+        list<contact> displayid = new list<contact>();
+        for(contact c:scope)
+        {
+            for(id u:userids)
+            {
+                {
+                    system.debug(u +'user');
+                    system.debug('hiii'+u);
+                UserRecordAccess i= [SELECT RecordID,HasReadAccess FROM UserRecordAccess 
+                                       WHERE UserId =:u
+                                         AND RecordID=:c.id ];
+                usermap.put(u,i.HasReadAccess);
+               system.debug(usermap.keyset());
+                }   
+            }
+            system.debug(usermap.keyset() + 'map1');
+            list<id> idtodisplay = new list<id>();
+            // system.debug(usermap.keyset());
+            for(id uid :usermap.keyset())
+            {
+                system.debug('key'+ uid);
+                system.debug(usermap.get(uid));
+                if(usermap.get(uid)==true)
+                {
+                    system.debug(usermap.get(uid));
+                    idtodisplay.add(uid );
+                    system.debug('to display' +idtodisplay );
+                } 
+                
+            }
+            
+            string str = string.valueOf(idtodisplay);
+            c.userrecordaccess__c = str;
+            displayid.add(c);
+            
+            
+        }
+        update displayid;
+        system.debug(displayid);
+         System.debug('@@@'+'batch execute end');
+    }    
+    global void finish(Database.BatchableContext bc){
+        // execute any post-processing operations
+         System.debug('@@@ batch finish');
+        
+    }    
+}
